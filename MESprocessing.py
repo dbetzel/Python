@@ -11,14 +11,25 @@
 #purpose:  added in multi day writing to the output files and the ability
 #to start writing a new file again on the first of the month
 ####################
+#updates
+#author: dawn.betzel
+#2021-10-22
+#purpose:  Chris Hoover added requirement (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")
+#for Gnarlywood, Merchandise, NonPostable and DirectShip
+####################
+
+#import modules
 import pandas as pd
 import numpy as np
 import openpyxl
 from datetime import date
+#set options to clear a warning -- related to python 3.9
 pd.options.mode.chained_assignment = None #default='warn'
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
+#First Requirements
+#Remove some things that Alex coded into his file
 def process1():
     #1 exclude all docTypes = 'AB', AC','SA'
     df['AlexCode'] = df['Document Type'].isin(['AB','AC','SA'])
@@ -28,6 +39,8 @@ def process1():
     pd.set_option('display.max_rows', None)
     print('process1 completed')
 
+#First Requirements
+#Not in use
 def process2():
     #2 string match run first
     dfStringMatch = df.duplicated(subset=['Abs','WBSText','Company Code','G/L Account','Profit Center'],keep=False)
@@ -35,14 +48,17 @@ def process2():
     dftempStringMatch = df[df['StringMatch1'] == True]
     print('process2 completed')
 
+#First Requirements
+#Not in use
 def process3():
     #string match run second
     dfStringMatch = df.duplicated(subset=['Abs','Company Code','G/L Account','Profit Center'],keep=False)
     df['StringMatch2'] = dfStringMatch
-    #print('dfStringMatch',dfStringMatch)
     dftempStringMatch = df[df['StringMatch2'] == True]
     print('process3 completed')
 
+#First Requirements
+#Not in use
 def process4(StringMatch):
     #4 this is our attempt to help our friends at MES to know how to properly cross reference things
     #tagging of StringMatch, marking which one goes with what
@@ -71,7 +87,8 @@ def process4(StringMatch):
     dfTempString.to_excel("outputStringMatch.xlsx", sheet_name='Sheet_name_1')
     print('process4 completed')
 
-
+#First Requirements
+#Not in use
 def process5():
     #5 find duplicates 
     dfDuplicates = df.duplicated(subset=['Year/month','Entry Date','Document Type','Company Code','G/L Account',
@@ -82,6 +99,8 @@ def process5():
     dfTempDups.to_excel("outputDuplicates.xlsx", sheet_name='Sheet_name_1')
     print('process5 completed')
 
+#First Requirements
+#Not in use
 def process6():
     #Sonopress with PO
     dfSonopress = df
@@ -93,6 +112,8 @@ def process6():
     dfTempSonopressWPO.to_excel("outputSonopressWPO.xlsx", sheet_name='Sheet_name_1')
     print('process6 completed')
 
+#First Requirements
+#Not in use
 def process7():
     #Sonopress no PO
     dfSonopress = df
@@ -104,6 +125,9 @@ def process7():
     dfTempSonopress.to_excel("outputSonopress.xlsx", sheet_name='Sheet_name_1')
     print('process7 completed')
 
+#First Requirements
+#Not in use
+#set column ProcessNum to the correct number for each process that had been run
 def processNum():
     conditions = [
         (df['AlexCode'] == True),
@@ -117,6 +141,7 @@ def processNum():
     choices = [1,2,3,6,7,5,4]
     df['ProcessNum'] = np.select(conditions, choices, default = -1)
     
+#Process the file, because of the data formattting of the files there is much tranforming that needs to be done
 def processFile():
     #adding columns and setting defaults
     df['POtext'] = 'abc'
@@ -148,7 +173,6 @@ def processFile():
     print('Starting to process the input file')
     totalRows1 = len(df.index)
     for row in df.index:
-        #print(row, df['Text'].iloc[row])
         poText = df['Text'].iloc[row]
         refText = str(df['Reference'].iloc[row])
         invText = ''
@@ -163,7 +187,7 @@ def processFile():
         elif colonPO in poText: 
             invText = poText[0:14]
             poText = poText[-10:]
-        elif POhash in poText: #take left 13 or 14 for WBSText
+        elif POhash in poText: #take left 14 for WBSText
             invText = poText[0:14]
             poText = 'PO' + poText[-8:]
         elif po in poText:
@@ -186,11 +210,13 @@ def processFile():
     #overwrite POtext 
     dfRefPO = df
     dfRefPO['POTextRef'].replace('', np.nan, inplace=True)
-    #same as SQL Coalesce
+    #same as SQL Coalesce, find the first non null value
     df['WBSText'] = np.where(df['WBS element'].isnull(),df['WBSText'],df['WBS element'])
     df['POtext'] = np.where(df['POTextRef'].isnull(),df['POtext'],df['POTextRef'])
     print('processing file completed, getting ready for comparing')
 
+#2nd Requirements
+#inner join Alex (SAP)file with Pam (MES)file
 def getAllMatchingPosFromPam():
     print('GetAllMatchingPos')
     #set df1 to df, so that you can leave df fully intact
@@ -205,33 +231,46 @@ def getAllMatchingPosFromPam():
     dfMatchingPOs = pd.merge(df1, dfPam, how='inner', left_on = 'POtext', right_on = 'PO_NUMBER')
     dfMatchingPOs.to_excel("outputMatchingPOs.xlsx", sheet_name='Sheet_name_1')
 
+#2nd Requirements
+#find all POs marked as Gnarlywood that are in the 200920 account, first pass
 def gnarlywood():
-    dfGnarlywood = dfMatchingPOs[(dfMatchingPOs['WAREHOUSE_IDENTIFIER'] == 'GNAR') &(dfMatchingPOs['CONFIG_KEY'] != 'MH')]
-    indexNames = dfMatchingPOs[(dfMatchingPOs['WAREHOUSE_IDENTIFIER'] == 'GNAR') &(dfMatchingPOs['CONFIG_KEY'] != 'MH')].index
+    dfGnarlywood = dfMatchingPOs[(dfMatchingPOs['WAREHOUSE_IDENTIFIER'] == 'GNAR') &(dfMatchingPOs['CONFIG_KEY'] != 'MH') & (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")]
+    indexNames = dfMatchingPOs[(dfMatchingPOs['WAREHOUSE_IDENTIFIER'] == 'GNAR') &(dfMatchingPOs['CONFIG_KEY'] != 'MH') & (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")].index
     dfMatchingPOs.drop(indexNames, inplace = True)
     print('Gnarlywood completed')
     return dfGnarlywood
 
+#2nd Requirements
+#find all POs for merchandise that are in the 200920 account, second pass
 def merchandise():
-    dfMerchandise = dfMatchingPOs[(dfMatchingPOs['CONFIG_KEY'] == 'MH')]
-    indexNames = dfMatchingPOs[(dfMatchingPOs['CONFIG_KEY'] == 'MH')].index
+    dfMerchandise = dfMatchingPOs[(dfMatchingPOs['CONFIG_KEY'] == 'MH') & (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")]
+    indexNames = dfMatchingPOs[(dfMatchingPOs['CONFIG_KEY'] == 'MH') & (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")].index
     dfMatchingPOs.drop(indexNames, inplace = True)
     print('Merchandise completed')
     return dfMerchandise
 
+#2nd Requirements
+#find all POs that are nonPostable that are in the 200920 account, third pass
 def nonPostable():
-    dfNonPostable = dfMatchingPOs[(dfMatchingPOs['POSTABLE_FLAG'] == 'N')]
-    indexNames = dfMatchingPOs[(dfMatchingPOs['POSTABLE_FLAG'] == 'N')].index
+    dfNonPostable = dfMatchingPOs[(dfMatchingPOs['POSTABLE_FLAG'] == 'N') & (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")]
+    indexNames = dfMatchingPOs[(dfMatchingPOs['POSTABLE_FLAG'] == 'N') & (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")].index
     dfMatchingPOs.drop(indexNames, inplace = True)
     return dfNonPostable
 
+#2nd Requirements
+#find all POs that are directShip that are in the 200920 account, fourth pass
 def directShip():
-    dfDirectShip = dfMatchingPOs[(dfMatchingPOs['WAREHOUSE_IDENTIFIER'] == 'DIR') & (dfMatchingPOs['CONFIG_KEY'] != 'MH') & (dfMatchingPOs['POSTABLE_FLAG'] == 'Y')]
-    indexNames = dfMatchingPOs[(dfMatchingPOs['WAREHOUSE_IDENTIFIER'] == 'DIR') & (dfMatchingPOs['CONFIG_KEY'] != 'MH') & (dfMatchingPOs['POSTABLE_FLAG'] == 'Y')].index
+    dfDirectShip = dfMatchingPOs[(dfMatchingPOs['WAREHOUSE_IDENTIFIER'] == 'DIR') & (dfMatchingPOs['CONFIG_KEY'] != 'MH') & (dfMatchingPOs['POSTABLE_FLAG'] == 'Y') & (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")]
+    indexNames = dfMatchingPOs[(dfMatchingPOs['WAREHOUSE_IDENTIFIER'] == 'DIR') & (dfMatchingPOs['CONFIG_KEY'] != 'MH') & (dfMatchingPOs['POSTABLE_FLAG'] == 'Y') & (dfMatchingPOs['SAP_ACCOUNT'] == "0000200920")].index
     dfMatchingPOs.drop(indexNames, inplace = True)
     print('directShip completed')
     return dfDirectShip
 
+#2nd Requirements
+#at first Sarah wanted this to run on a daily basis the code is written for this
+#it should check for today.day == 1 then only run that section on the first, every other day it would run and concat the file to make for a cumulative month by the time it is done
+#requirements shifted and now Chris says run only one day in the middle of the month
+#Chris keeps changing the day so I currently am looking for a pattern and just changing today.day to what ever the date is that I run
 def outputFiles():
     if today.day == 11:
         dfGnarlywood.to_excel("outputGnarlywood.xlsx", sheet_name='Sheet_name_1')
@@ -261,8 +300,8 @@ def outputFiles():
     print('output Excel files completed')
     
 #data sources   
-df = pd.read_excel(r'C:\Users\DawnBetzel\OneDrive - Warner Music Group\Projects\FY2022\MES\SMcF SAP Pull.xlsx')
-dfPam = pd.read_excel(r'C:\Users\DawnBetzel\OneDrive - Warner Music Group\Projects\FY2022\MES\8.25-10.26 PAM MES DATA.xlsx')
+df = pd.read_excel(r'C:\Users\DawnBetzel\OneDrive - Warner Music Group\Projects\FY2022\MES\10.27-11.17 ALEX SAP DATA.XLSX')
+dfPam = pd.read_excel(r'C:\Users\DawnBetzel\OneDrive - Warner Music Group\Projects\FY2022\MES\10.27-11.17 PAM MES DATA.xlsx')
 #will have to do this for three files and append to the bottom of df
 #MES can only export one year at a time??  Why is this need to know??
 
